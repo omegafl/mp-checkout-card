@@ -49,6 +49,11 @@
     <div>
         <h3>Enter your credential to activate custom checkout</h3>
         <div>
+            <label for="amountFantasy">Amount</label>
+            <input id="amountFantasy" data-checkout="amountFantasy" type="text" onselectstart="return false"
+                autocomplete=off>
+        </div>
+        <div>
             <label for="publicKey">Public key</label>
             <input id="publicKey" data-checkout="publicKey" type="text" onselectstart="return false" autocomplete=off
                 placeholder="APP-USR-00000000-0000-0000-0000-000000000000" size="45">
@@ -61,50 +66,6 @@
                 size="95">
         </div>
     </div>
-
-    <script type="text/javascript">
-        var public_key = '';
-        var access_token = '';
-
-        document.getElementById('publicKey').addEventListener('change', validatePublicKey);
-        document.getElementById('accessToken').addEventListener('change', validateAccessToken);
-
-        function validatePublicKey() {
-            var inputPublicKey = document.getElementById('publicKey');
-            public_key = inputPublicKey.value;
-            if(public_key != '') {
-            fetch('https://api.mercadopago.com/plugins-credentials-wrapper/credentials?public_key=' + public_key).then(function (response) {
-                if (!response.ok) {
-                    throw Error(response.status);
-                } 
-                inputPublicKey.style.borderColor = '#009416';
-            })
-                .catch(function (error) {
-                    public_key = '';
-                    inputPublicKey.style.borderColor = '#f04449';
-                    console.log('There has been a problem with your fetch operation Public Key: ' + error);
-                })
-            } else {
-                inputPublicKey.style.borderColor = '';
-            }
-        }
-
-        function validateAccessToken() {
-            access_token = document.getElementById('accessToken').value;
-            fetch('https://api.mercadopago.com/plugins-credentials-wrapper/credentials?public_key=' + access_token).then(function (response) {
-                if (response.ok) {
-
-                } else {
-
-                }
-            })
-                .catch(function (error) {
-                    console.log('There has been a problem with your fetch operation Access Token: ' + error.message);
-                })
-        }
-
-    </script>
-
 
     <form action="/process_payment" method="post" id="paymentForm">
         <h3>Enter your card details</h3>
@@ -197,7 +158,7 @@
             </div>
 
             <div id="mercadopago-utilities">
-                <input type="hidden" id="amount" value="100" name="mercadopago_custom[amount]" />
+                <input type="hidden" id="amount" value="" name="mercadopago_custom[amount]" />
                 <input type="hidden" id="cardTokenId" name="cardTokenId" name="mercadopago_custom[cardTokenId]" />
                 <input type="hidden" id="paymentMethodId" name="paymentMethodId"
                     name="mercadopago_custom[paymentMethodId]" />
@@ -268,614 +229,694 @@
 
     <script type="text/javascript">
 
-        var seller = {
-            site_id: 'MLA',
-            public_key: public_key
-        };
+        //  #########################
+        //  ##  Creddential logic  ##
+        //  #########################
 
-        var objPaymentMethod = {};
-        var additionalInfoNeeded = {};
+        var public_key = '';
+        var access_token = '';
+        var site_id = '';
+        var amount_fantasy = '';
 
-        window.Mercadopago.setPublishableKey(seller.public_key);
+        document.getElementById('amountFantasy').addEventListener('change', getAmuntFantasy);
+        document.getElementById('publicKey').addEventListener('change', validatePublicKey);
+        document.getElementById('accessToken').addEventListener('change', validateAccessToken);
 
-        document.getElementById('cardNumber').addEventListener('change', guessPaymentMethod);
-
-        /**
-         * Get Bin from Card Number
-         */
-        function getBin() {
-            var cardnumber = document.getElementById('cardNumber');
-            return cardnumber.value.replace(/[ .-]/g, '').slice(0, 6);
+        function getAmuntFantasy() {
+            amount_fantasy = document.getElementById('amountFantasy').value;
+            document.getElementById('amount').value = amount_fantasy;
         }
 
-        function guessPaymentMethod(event) {
-            hideErrors();
-            clearHolderName();
-            clearExpirationDate();
-            clearSecurityCode();
-            clearIssuer();
-            clearInstallments();
-            clearTax();
-            clearDoc();
-
-            var bin = getBin();
-
-            if (bin.length < 6) {
-                resetBackgroundCard();
-                return;
-            }
-
-            if (bin.length >= 6) {
-                Mercadopago.getPaymentMethod({
-                    'bin': bin
-                }, paymentMethodHandler);
-            }
-        }
-
-        /**
-         * Handle payment Method response
-         *
-         * @param {number} status
-         * @param {object} response
-         */
-        function paymentMethodHandler(status, response) {
-            if (status === 200) {
-
-                objPaymentMethod = response[0];
-                setPaymentMethodId(objPaymentMethod.id);
-                setImageCard(objPaymentMethod.secure_thumbnail);
-                loadAdditionalInfo(objPaymentMethod.additional_info_needed);
-                additionalInfoHandler();
+        function validatePublicKey() {
+            var inputPublicKey = document.getElementById('publicKey');
+            public_key = inputPublicKey.value;
+            if (public_key != '') {
+                fetch('https://api.mercadopago.com/plugins-credentials-wrapper/credentials?public_key=' + public_key).then(function (response) {
+                    if (!response.ok) {
+                        throw Error(response.status);
+                    }
+                    inputPublicKey.style.borderColor = '#009416';
+                    if (access_token != '' && public_key != '') {
+                        startCheckout();
+                    }
+                })
+                    .catch(function (error) {
+                        public_key = '';
+                        inputPublicKey.style.borderColor = '#f04449';
+                        console.log('There has been a problem with your fetch operation Public Key: ' + error);
+                    })
             } else {
-                resetBackgroundCard();
+                inputPublicKey.style.borderColor = '';
             }
         }
 
-        /**
-         * Set value on paymentMethodId element
-         *
-         * @param {string} paymentMethodId
-         */
-        function setPaymentMethodId(paymentMethodId) {
-            document.getElementById('paymentMethodId').value = paymentMethodId;
+        function validateAccessToken() {
+            var inputAccessToken = document.getElementById('accessToken');
+            var access_token = inputAccessToken.value;
+            if (access_token != '') {
+                fetch('https://api.mercadopago.com/users/me', {
+                    headers: new Headers({
+                        'Content-Type': 'text/plain',
+                        'Authorization': 'Bearer ' + access_token
+                    })
+                }).then(function (response) {
+                    if (!response.ok) {
+                        throw Error(response.status);
+                    }
+                    return response.json();
+                }).then(function (response) {
+                    site_id = response.site_id;
+                    inputAccessToken.style.borderColor = '#009416';
+                    if (access_token != '' && public_key != '') {
+                        startCheckout();
+                    }
+                }).catch(function (error) {
+                    access_token = '';
+                    site_id = '';
+                    inputAccessToken.style.borderColor = '#f04449';
+                    console.log('There has been a problem with your fetch operation Acess Token: ' + error);
+                })
+            } else {
+                inputAccessToken.style.borderColor = '';
+                site_id = '';
+            }
         }
 
-        /**
-        * Added image in input Card Number
-        */
-        function setImageCard(secureThumbnail) {
-            document.getElementById('cardNumber').style.background = 'url(' + secureThumbnail + ') 98% 50% no-repeat #fff';
-        }
+        function startCheckout() {
 
-        /**
-        * Remove background image from imput
-        */
-        function resetBackgroundCard() {
-            document.getElementById('cardNumber').style.background = 'no-repeat #fff';
-        }
+            //  #########################
+            //  ##   Checkout logic    ##
+            //  #########################
 
-        /**
-         *
-         * Load Additional Info to use for build payment form
-         *
-         * @param {array} additional_info_needed
-         */
-        function loadAdditionalInfo(additional_info_needed) {
-            additionalInfoNeeded = {
-                'issuer': false,
-                'cardholder_name': false,
-                'cardholder_identification_type': false,
-                'cardholder_identification_number': false
+            var seller = {
+                site_id: site_id,
+                public_key: public_key
             };
 
-            for (var i = 0; i < additional_info_needed.length; i++) {
-                if (additional_info_needed[i] === 'issuer_id') {
-                    additionalInfoNeeded.issuer = true;
-                }
-                if (additional_info_needed[i] === 'cardholder_name') {
-                    additionalInfoNeeded.cardholder_name = true;
-                }
-                if (additional_info_needed[i] === 'cardholder_identification_type') {
-                    additionalInfoNeeded.cardholder_identification_type = true;
-                }
-                if (additional_info_needed[i] === 'cardholder_identification_number') {
-                    additionalInfoNeeded.cardholder_identification_number = true;
-                }
-            }
-        }
+            var objPaymentMethod = {};
+            var additionalInfoNeeded = {};
 
-        /**
-        * Check what information is necessary to pay and show inputs
-        */
-        function additionalInfoHandler() {
-            if (additionalInfoNeeded.cardholder_name) {
-                document.getElementById('mp-card-holder-div').style.display = 'block';
-            } else {
-                document.getElementById('mp-card-holder-div').style.display = 'none';
+            window.Mercadopago.setPublishableKey(seller.public_key);
+
+            document.getElementById('cardNumber').addEventListener('change', guessPaymentMethod);
+
+            /**
+             * Get Bin from Card Number
+             */
+            function getBin() {
+                var cardnumber = document.getElementById('cardNumber');
+                return cardnumber.value.replace(/[ .-]/g, '').slice(0, 6);
             }
 
-            if (additionalInfoNeeded.issuer) {
-                document.getElementById('mp-issuer-div').style.display = 'block';
-                document.getElementById('mp-installments-div').classList.remove('mp-col-md-12');
-                document.getElementById('mp-installments-div').classList.add('mp-col-md-8');
-                Mercadopago.getIssuers(objPaymentMethod.id, getBin(), issuersHandler);
-            } else {
+            function guessPaymentMethod(event) {
+                hideErrors();
+                clearHolderName();
+                clearExpirationDate();
+                clearSecurityCode();
                 clearIssuer();
-                setInstallments();
-            }
-
-            if (additionalInfoNeeded.cardholder_identification_type) {
-                document.getElementById('mp-doc-div').style.display = 'block';
-                document.getElementById('mp-doc-type-div').style.display = 'block';
-                Mercadopago.getIdentificationTypes();
-            } else {
-                document.getElementById('mp-doc-type-div').style.display = 'none';
-            }
-
-            if (additionalInfoNeeded.cardholder_identification_number) {
-                document.getElementById('mp-doc-div').style.display = 'block';
-                document.getElementById('mp-doc-number-div').style.display = 'block';
-            } else {
-                document.getElementById('mp-doc-number-div').style.display = 'none';
-            }
-
-            if (!additionalInfoNeeded.cardholder_identification_type && !additionalInfoNeeded.cardholder_identification_number) {
-                document.getElementById('mp-doc-div').style.display = 'none';
-            }
-        }
-
-        /**
-         * Call insttalments with issuer ou not, depends on additionalInfoHandler()
-         */
-        function setInstallments() {
-            var params_installments = {};
-            var amount = getAmount();
-            var issuer = false;
-            for (var i = 0; i < objPaymentMethod.additional_info_needed.length; i++) {
-                if (objPaymentMethod.additional_info_needed[i] === 'issuer_id') {
-                    issuer = true;
-                }
-            }
-            if (issuer) {
-                var issuerId = document.getElementById('issuer').value;
-                params_installments = {
-                    'bin': getBin(),
-                    'amount': amount,
-                    'issuer_id': issuerId
-                };
-
-                if (issuerId === '-1') {
-                    return;
-                }
-            } else {
-                params_installments = {
-                    'bin': getBin(),
-                    'amount': amount
-                };
-            }
-            Mercadopago.getInstallments(params_installments, installmentHandler);
-        }
-
-        /**
-         * Handle issuers response and build select
-         *
-         * @param {status} status
-         * @param {object} response
-         */
-        function issuersHandler(status, response) {
-            if (status === 200) {
-
-                // If the API does not return any bank.
-                var issuersSelector = document.getElementById('issuer');
-                var fragment = document.createDocumentFragment();
-
-                issuersSelector.options.length = 0;
-                var option = new Option('To choose...', '-1');
-                fragment.appendChild(option);
-
-                for (var i = 0; i < response.length; i++) {
-                    var name = response[i].name === 'default' ? 'Otro' : response[i].name;
-                    fragment.appendChild(new Option(name, response[i].id));
-                }
-
-                issuersSelector.appendChild(fragment);
-                issuersSelector.removeAttribute('disabled');
-                document.getElementById('issuer').addEventListener('change', setInstallments);
-            } else {
-                clearIssuer();
-            }
-        }
-
-        /**
-          * Get Amount end calculate discount for hide inputs
-          */
-        function getAmount() {
-            return document.getElementById('amount').value;
-        }
-
-        /**
-         * Clear input
-         */
-        function clearHolderName() {
-            document.getElementById('cardholderName').value = '';
-        }
-
-        /**
-         * Clear input
-         */
-        function clearExpirationDate() {
-            document.getElementById('cardExpiration').value = '';
-        }
-
-        /**
-         * Clear input
-         */
-        function clearSecurityCode() {
-            document.getElementById('securityCode').value = '';
-        }
-
-        /**
-         * Clear input select and change to default layout
-         */
-        function clearIssuer() {
-            document.getElementById('issuer').innerHTML = '';
-        }
-
-        /**
-        * Clear input select
-        */
-        function clearInstallments() {
-            document.getElementById('installments').innerHTML = '';
-        }
-
-        /**
-        * Clear Tax
-        */
-        function clearTax() {
-            document.querySelector('#mp-tax-cft-text').innerHTML = '';
-            document.querySelector('#mp-tax-tea-text').innerHTML = '';
-        }
-
-        /**
-         * Clear input and change to default layout
-         */
-        function clearDoc() {
-            document.getElementById('mp-doc-div').style.display = 'none';
-            document.getElementById('mp-doc-type-div').style.display = 'none';
-            document.getElementById('docType').innerHTML = '';
-            document.getElementById('docNumber').value = '';
-        }
-
-        /**
-         * Call insttalments with issuer ou not, depends on additionalInfoHandler()
-         */
-        function setInstallments() {
-            var params_installments = {};
-            var amount = getAmount();
-            var issuer = false;
-            for (var i = 0; i < objPaymentMethod.additional_info_needed.length; i++) {
-                if (objPaymentMethod.additional_info_needed[i] === 'issuer_id') {
-                    issuer = true;
-                }
-            }
-            if (issuer) {
-                var issuerId = document.getElementById('issuer').value;
-                params_installments = {
-                    'bin': getBin(),
-                    'amount': amount,
-                    'issuer_id': issuerId
-                };
-
-                if (issuerId === '-1') {
-                    return;
-                }
-            } else {
-                params_installments = {
-                    'bin': getBin(),
-                    'amount': amount
-                };
-            }
-            Mercadopago.getInstallments(params_installments, installmentHandler);
-        }
-
-        /**
-         * Get instalments
-         *
-         * @param {number} status
-         * @param {object} response
-         */
-        function installmentHandler(status, response) {
-            if (status === 200) {
-                var selectorInstallments = document.getElementById('installments');
-                var html_option = '<option value="-1">' + 'To chose...</option>';
-                var payerCosts = [];
-                for (var i = 0; i < response.length; i++) {
-                    if (response[i].processing_mode === 'aggregator') {
-                        payerCosts = response[i].payer_costs;
-                    }
-                }
-
-                for (var j = 0; j < payerCosts.length; j++) {
-                    html_option += '<option value="' + payerCosts[j].installments + '" ' + argentinaResolution(payerCosts[j].labels) + '>' +
-                        (payerCosts[j].recommended_message || payerCosts[j].installments) +
-                        '</option>';
-                }
-
-                selectorInstallments.innerHTML = html_option;
-                if (seller.site_id === 'MLA') {
-                    clearTax();
-                    document.getElementById('installments').addEventListener('change', showTaxes);
-                }
-            } else {
                 clearInstallments();
                 clearTax();
-            }
-        }
+                clearDoc();
 
-        /**
-        * Resolution 51/2017
-        *
-        * @param {*} payerCosts
-        * @returns {string}
-        */
-        function argentinaResolution(payerCosts) {
-            var dataInput = '';
-            if (seller.site_id === 'MLA') {
-                for (var l = 0; l < payerCosts.length; l++) {
-                    if (payerCosts[l].indexOf('CFT_') !== -1) {
-                        dataInput = 'data-tax="' + payerCosts[l] + '"';
+                var bin = getBin();
+
+                if (bin.length < 6) {
+                    resetBackgroundCard();
+                    return;
+                }
+
+                if (bin.length >= 6) {
+                    Mercadopago.getPaymentMethod({
+                        'bin': bin
+                    }, paymentMethodHandler);
+                }
+            }
+
+            /**
+             * Handle payment Method response
+             *
+             * @param {number} status
+             * @param {object} response
+             */
+            function paymentMethodHandler(status, response) {
+                if (status === 200) {
+
+                    objPaymentMethod = response[0];
+                    setPaymentMethodId(objPaymentMethod.id);
+                    setImageCard(objPaymentMethod.secure_thumbnail);
+                    loadAdditionalInfo(objPaymentMethod.additional_info_needed);
+                    additionalInfoHandler();
+                } else {
+                    resetBackgroundCard();
+                }
+            }
+
+            /**
+             * Set value on paymentMethodId element
+             *
+             * @param {string} paymentMethodId
+             */
+            function setPaymentMethodId(paymentMethodId) {
+                document.getElementById('paymentMethodId').value = paymentMethodId;
+            }
+
+            /**
+            * Added image in input Card Number
+            */
+            function setImageCard(secureThumbnail) {
+                document.getElementById('cardNumber').style.background = 'url(' + secureThumbnail + ') 98% 50% no-repeat #fff';
+            }
+
+            /**
+            * Remove background image from imput
+            */
+            function resetBackgroundCard() {
+                document.getElementById('cardNumber').style.background = 'no-repeat #fff';
+            }
+
+            /**
+             *
+             * Load Additional Info to use for build payment form
+             *
+             * @param {array} additional_info_needed
+             */
+            function loadAdditionalInfo(additional_info_needed) {
+                additionalInfoNeeded = {
+                    'issuer': false,
+                    'cardholder_name': false,
+                    'cardholder_identification_type': false,
+                    'cardholder_identification_number': false
+                };
+
+                for (var i = 0; i < additional_info_needed.length; i++) {
+                    if (additional_info_needed[i] === 'issuer_id') {
+                        additionalInfoNeeded.issuer = true;
                     }
+                    if (additional_info_needed[i] === 'cardholder_name') {
+                        additionalInfoNeeded.cardholder_name = true;
+                    }
+                    if (additional_info_needed[i] === 'cardholder_identification_type') {
+                        additionalInfoNeeded.cardholder_identification_type = true;
+                    }
+                    if (additional_info_needed[i] === 'cardholder_identification_number') {
+                        additionalInfoNeeded.cardholder_identification_number = true;
+                    }
+                }
+            }
+
+            /**
+            * Check what information is necessary to pay and show inputs
+            */
+            function additionalInfoHandler() {
+                if (additionalInfoNeeded.cardholder_name) {
+                    document.getElementById('mp-card-holder-div').style.display = 'block';
+                } else {
+                    document.getElementById('mp-card-holder-div').style.display = 'none';
+                }
+
+                if (additionalInfoNeeded.issuer) {
+                    document.getElementById('mp-issuer-div').style.display = 'block';
+                    document.getElementById('mp-installments-div').classList.remove('mp-col-md-12');
+                    document.getElementById('mp-installments-div').classList.add('mp-col-md-8');
+                    Mercadopago.getIssuers(objPaymentMethod.id, getBin(), issuersHandler);
+                } else {
+                    clearIssuer();
+                    setInstallments();
+                }
+
+                if (additionalInfoNeeded.cardholder_identification_type) {
+                    document.getElementById('mp-doc-div').style.display = 'block';
+                    document.getElementById('mp-doc-type-div').style.display = 'block';
+                    Mercadopago.getIdentificationTypes();
+                } else {
+                    document.getElementById('mp-doc-type-div').style.display = 'none';
+                }
+
+                if (additionalInfoNeeded.cardholder_identification_number) {
+                    document.getElementById('mp-doc-div').style.display = 'block';
+                    document.getElementById('mp-doc-number-div').style.display = 'block';
+                } else {
+                    document.getElementById('mp-doc-number-div').style.display = 'none';
+                }
+
+                if (!additionalInfoNeeded.cardholder_identification_type && !additionalInfoNeeded.cardholder_identification_number) {
+                    document.getElementById('mp-doc-div').style.display = 'none';
+                }
+            }
+
+            /**
+             * Call insttalments with issuer ou not, depends on additionalInfoHandler()
+             */
+            function setInstallments() {
+                var params_installments = {};
+                var amount = getAmount();
+                var issuer = false;
+                for (var i = 0; i < objPaymentMethod.additional_info_needed.length; i++) {
+                    if (objPaymentMethod.additional_info_needed[i] === 'issuer_id') {
+                        issuer = true;
+                    }
+                }
+                if (issuer) {
+                    var issuerId = document.getElementById('issuer').value;
+                    params_installments = {
+                        'bin': getBin(),
+                        'amount': amount,
+                        'issuer_id': issuerId
+                    };
+
+                    if (issuerId === '-1') {
+                        return;
+                    }
+                } else {
+                    params_installments = {
+                        'bin': getBin(),
+                        'amount': amount
+                    };
+                }
+                Mercadopago.getInstallments(params_installments, installmentHandler);
+            }
+
+            /**
+             * Handle issuers response and build select
+             *
+             * @param {status} status
+             * @param {object} response
+             */
+            function issuersHandler(status, response) {
+                if (status === 200) {
+
+                    // If the API does not return any bank.
+                    var issuersSelector = document.getElementById('issuer');
+                    var fragment = document.createDocumentFragment();
+
+                    issuersSelector.options.length = 0;
+                    var option = new Option('To choose...', '-1');
+                    fragment.appendChild(option);
+
+                    for (var i = 0; i < response.length; i++) {
+                        var name = response[i].name === 'default' ? 'Otro' : response[i].name;
+                        fragment.appendChild(new Option(name, response[i].id));
+                    }
+
+                    issuersSelector.appendChild(fragment);
+                    issuersSelector.removeAttribute('disabled');
+                    document.getElementById('issuer').addEventListener('change', setInstallments);
+                } else {
+                    clearIssuer();
+                }
+            }
+
+            /**
+              * Get Amount end calculate discount for hide inputs
+              */
+            function getAmount() {
+                return document.getElementById('amount').value;
+            }
+
+            /**
+             * Clear input
+             */
+            function clearHolderName() {
+                document.getElementById('cardholderName').value = '';
+            }
+
+            /**
+             * Clear input
+             */
+            function clearExpirationDate() {
+                document.getElementById('cardExpiration').value = '';
+            }
+
+            /**
+             * Clear input
+             */
+            function clearSecurityCode() {
+                document.getElementById('securityCode').value = '';
+            }
+
+            /**
+             * Clear input select and change to default layout
+             */
+            function clearIssuer() {
+                document.getElementById('issuer').innerHTML = '';
+            }
+
+            /**
+            * Clear input select
+            */
+            function clearInstallments() {
+                document.getElementById('installments').innerHTML = '';
+            }
+
+            /**
+            * Clear Tax
+            */
+            function clearTax() {
+                document.querySelector('#mp-tax-cft-text').innerHTML = '';
+                document.querySelector('#mp-tax-tea-text').innerHTML = '';
+            }
+
+            /**
+             * Clear input and change to default layout
+             */
+            function clearDoc() {
+                document.getElementById('mp-doc-div').style.display = 'none';
+                document.getElementById('mp-doc-type-div').style.display = 'none';
+                document.getElementById('docType').innerHTML = '';
+                document.getElementById('docNumber').value = '';
+            }
+
+            /**
+             * Call insttalments with issuer ou not, depends on additionalInfoHandler()
+             */
+            function setInstallments() {
+                var params_installments = {};
+                var amount = getAmount();
+                var issuer = false;
+                for (var i = 0; i < objPaymentMethod.additional_info_needed.length; i++) {
+                    if (objPaymentMethod.additional_info_needed[i] === 'issuer_id') {
+                        issuer = true;
+                    }
+                }
+                if (issuer) {
+                    var issuerId = document.getElementById('issuer').value;
+                    params_installments = {
+                        'bin': getBin(),
+                        'amount': amount,
+                        'issuer_id': issuerId
+                    };
+
+                    if (issuerId === '-1') {
+                        return;
+                    }
+                } else {
+                    params_installments = {
+                        'bin': getBin(),
+                        'amount': amount
+                    };
+                }
+                Mercadopago.getInstallments(params_installments, installmentHandler);
+            }
+
+            /**
+             * Get instalments
+             *
+             * @param {number} status
+             * @param {object} response
+             */
+            function installmentHandler(status, response) {
+                if (status === 200) {
+                    var selectorInstallments = document.getElementById('installments');
+                    var html_option = '<option value="-1">' + 'To chose...</option>';
+                    var payerCosts = [];
+                    for (var i = 0; i < response.length; i++) {
+                        if (response[i].processing_mode === 'aggregator') {
+                            payerCosts = response[i].payer_costs;
+                        }
+                    }
+
+                    for (var j = 0; j < payerCosts.length; j++) {
+                        html_option += '<option value="' + payerCosts[j].installments + '" ' + argentinaResolution(payerCosts[j].labels) + '>' +
+                            (payerCosts[j].recommended_message || payerCosts[j].installments) +
+                            '</option>';
+                    }
+
+                    selectorInstallments.innerHTML = html_option;
+                    if (seller.site_id === 'MLA') {
+                        clearTax();
+                        document.getElementById('installments').addEventListener('change', showTaxes);
+                    }
+                } else {
+                    clearInstallments();
+                    clearTax();
+                }
+            }
+
+            /**
+            * Resolution 51/2017
+            *
+            * @param {*} payerCosts
+            * @returns {string}
+            */
+            function argentinaResolution(payerCosts) {
+                var dataInput = '';
+                if (seller.site_id === 'MLA') {
+                    for (var l = 0; l < payerCosts.length; l++) {
+                        if (payerCosts[l].indexOf('CFT_') !== -1) {
+                            dataInput = 'data-tax="' + payerCosts[l] + '"';
+                        }
+                    }
+                    return dataInput;
                 }
                 return dataInput;
             }
-            return dataInput;
-        }
 
-        /**
-         * Hide errors when return of cardToken error
-         */
-        function hideErrors() {
-            for (var x = 0; x < document.querySelectorAll('[data-checkout]').length; x++) {
-                var field = document.querySelectorAll('[data-checkout]')[x];
-                field.classList.remove('mp-error-input');
-                field.classList.remove('mp-form-control-error');
-            }
+            /**
+             * Hide errors when return of cardToken error
+             */
+            function hideErrors() {
+                for (var x = 0; x < document.querySelectorAll('[data-checkout]').length; x++) {
+                    var field = document.querySelectorAll('[data-checkout]')[x];
+                    field.classList.remove('mp-error-input');
+                    field.classList.remove('mp-form-control-error');
+                }
 
-            for (var y = 0; y < document.querySelectorAll('.mp-error').length; y++) {
-                var span = document.querySelectorAll('.mp-error')[y];
-                span.style.display = 'none';
-            }
-        }
-
-        /**
-         * Show taxes resolution 51/2017 for MLA
-         */
-        function showTaxes() {
-            var selectorInstallments = document.querySelector('#installments');
-            var tax = selectorInstallments.options[selectorInstallments.selectedIndex].getAttribute('data-tax');
-            var cft = '';
-            var tea = '';
-            if (tax != null) {
-                var tax_split = tax.split('|');
-                cft = tax_split[0].replace('_', ' ');
-                tea = tax_split[1].replace('_', ' ');
-                if (cft === 'CFT 0,00%' && tea === 'TEA 0,00%') {
-                    cft = '';
-                    tea = '';
+                for (var y = 0; y < document.querySelectorAll('.mp-error').length; y++) {
+                    var span = document.querySelectorAll('.mp-error')[y];
+                    span.style.display = 'none';
                 }
             }
-            document.querySelector('#mp-tax-cft-text').innerHTML = cft;
-            document.querySelector('#mp-tax-tea-text').innerHTML = tea;
-        }
 
-    </script>
-
-    <script type="text/javascript">
-        var mercado_pago_submit = false;
-
-        var element = document.querySelector('form');
-        element.addEventListener('submit', function (event) {
-            event.preventDefault();
-            return mercadoPagoFormHandler();
-        });
-
-        /**
-            * Handler submit
-            *
-            * @return {bool}
-            */
-        function mercadoPagoFormHandler() {
-            if (mercado_pago_submit) {
-                mercado_pago_submit = false;
-                return true;
+            /**
+             * Show taxes resolution 51/2017 for MLA
+             */
+            function showTaxes() {
+                var selectorInstallments = document.querySelector('#installments');
+                var tax = selectorInstallments.options[selectorInstallments.selectedIndex].getAttribute('data-tax');
+                var cft = '';
+                var tea = '';
+                if (tax != null) {
+                    var tax_split = tax.split('|');
+                    cft = tax_split[0].replace('_', ' ');
+                    tea = tax_split[1].replace('_', ' ');
+                    if (cft === 'CFT 0,00%' && tea === 'TEA 0,00%') {
+                        cft = '';
+                        tea = '';
+                    }
+                }
+                document.querySelector('#mp-tax-cft-text').innerHTML = cft;
+                document.querySelector('#mp-tax-tea-text').innerHTML = tea;
             }
 
-            if (validateInputsCreateToken()) {
-                return createToken();
-            }
+            // #####################
+            // ## Submit controll ##
+            // #####################
 
-            return false;
-        }
+            var mercado_pago_submit = false;
 
-        /**
-        * Validate Inputs to Create Token
-        *
-        * @return {bool}
-        */
-        function validateInputsCreateToken() {
-            hideErrors();
-            var fixedInputs = validateFixedInputs();
-            var additionalInputs = validateAdditionalInputs();
+            var element = document.querySelector('form');
+            element.addEventListener('submit', function (event) {
+                event.preventDefault();
+                return mercadoPagoFormHandler();
+            });
 
-            if (fixedInputs || additionalInputs) {
-                focusInputError();
+            /**
+                * Handler submit
+                *
+                * @return {bool}
+                */
+            function mercadoPagoFormHandler() {
+                if (mercado_pago_submit) {
+                    mercado_pago_submit = false;
+                    return true;
+                }
+
+                if (validateInputsCreateToken()) {
+                    return createToken();
+                }
+
                 return false;
             }
 
-            return true;
-        }
+            /**
+            * Validate Inputs to Create Token
+            *
+            * @return {bool}
+            */
+            function validateInputsCreateToken() {
+                hideErrors();
+                var fixedInputs = validateFixedInputs();
+                var additionalInputs = validateAdditionalInputs();
 
-        /**
-        * Validate fixed Inputs is empty
-        *
-        * @return {bool}
-        */
-        function validateFixedInputs() {
-            var emptyInputs = false;
-            var form = getForm();
-            var form_inputs = form.querySelectorAll('[data-checkout]');
-            var fixed_inputs = [
-                'installments',
-                'securityCode',
-                'cardExpiration',
-                'cardNumber'
-            ];
+                if (fixedInputs || additionalInputs) {
+                    focusInputError();
+                    return false;
+                }
 
-            for (var x = 0; x < form_inputs.length; x++) {
-                var element = form_inputs[x];
-                // Check is a input to create token.
-                if (fixed_inputs.indexOf(element.getAttribute('data-checkout')) > -1) {
-                    if (element.value === '-1' || element.value === '') {
-                        var span = form.querySelectorAll('span[data-main="#' + element.id + '"]');
-                        if (span.length > 0) {
-                            span[0].style.display = 'block';
+                return true;
+            }
+
+            /**
+            * Validate fixed Inputs is empty
+            *
+            * @return {bool}
+            */
+            function validateFixedInputs() {
+                var emptyInputs = false;
+                var form = getForm();
+                var form_inputs = form.querySelectorAll('[data-checkout]');
+                var fixed_inputs = [
+                    'installments',
+                    'securityCode',
+                    'cardExpiration',
+                    'cardNumber'
+                ];
+
+                for (var x = 0; x < form_inputs.length; x++) {
+                    var element = form_inputs[x];
+                    // Check is a input to create token.
+                    if (fixed_inputs.indexOf(element.getAttribute('data-checkout')) > -1) {
+                        if (element.value === '-1' || element.value === '') {
+                            var span = form.querySelectorAll('span[data-main="#' + element.id + '"]');
+                            if (span.length > 0) {
+                                span[0].style.display = 'block';
+                            }
+                            element.classList.add('mp-form-control-error');
+                            emptyInputs = true;
                         }
-                        element.classList.add('mp-form-control-error');
+                    }
+                }
+
+                if (emptyInputs) {
+                    return emptyInputs;
+                } else {
+                    return emptyInputs;
+                }
+            }
+
+            /**
+            * Validate Additional Inputs
+            *
+            * @return {bool}
+            */
+            function validateAdditionalInputs() {
+                var emptyInputs = false;
+
+                if (additionalInfoNeeded.issuer) {
+                    var inputMpIssuer = document.getElementById('issuer');
+                    if (inputMpIssuer.value === '-1' || inputMpIssuer.value === '') {
+                        inputMpIssuer.classList.add('mp-form-control-error');
                         emptyInputs = true;
                     }
                 }
-            }
-
-            if (emptyInputs) {
-                return emptyInputs;
-            } else {
-                return emptyInputs;
-            }
-        }
-
-        /**
-        * Validate Additional Inputs
-        *
-        * @return {bool}
-        */
-        function validateAdditionalInputs() {
-            var emptyInputs = false;
-
-            if (additionalInfoNeeded.issuer) {
-                var inputMpIssuer = document.getElementById('issuer');
-                if (inputMpIssuer.value === '-1' || inputMpIssuer.value === '') {
-                    inputMpIssuer.classList.add('mp-form-control-error');
-                    emptyInputs = true;
+                if (additionalInfoNeeded.cardholder_name) {
+                    var inputCardholderName = document.getElementById('cardholderName');
+                    if (inputCardholderName.value === '-1' || inputCardholderName.value === '') {
+                        inputCardholderName.classList.add('mp-form-control-error');
+                        emptyInputs = true;
+                    }
                 }
-            }
-            if (additionalInfoNeeded.cardholder_name) {
-                var inputCardholderName = document.getElementById('cardholderName');
-                if (inputCardholderName.value === '-1' || inputCardholderName.value === '') {
-                    inputCardholderName.classList.add('mp-form-control-error');
-                    emptyInputs = true;
+                if (additionalInfoNeeded.cardholder_identification_type) {
+                    var inputDocType = document.getElementById('docType');
+                    if (inputDocType.value === '-1' || inputDocType.value === '') {
+                        inputDocType.classList.add('mp-form-control-error');
+                        emptyInputs = true;
+                    }
                 }
-            }
-            if (additionalInfoNeeded.cardholder_identification_type) {
-                var inputDocType = document.getElementById('docType');
-                if (inputDocType.value === '-1' || inputDocType.value === '') {
-                    inputDocType.classList.add('mp-form-control-error');
-                    emptyInputs = true;
+                if (additionalInfoNeeded.cardholder_identification_number) {
+                    var docNumber = document.getElementById('docNumber');
+                    if (docNumber.value === '-1' || docNumber.value === '') {
+                        docNumber.classList.add('mp-form-control-error');
+                        document.getElementById('mp-error-324').style.display = 'inline-block';
+                        emptyInputs = true;
+                    }
                 }
-            }
-            if (additionalInfoNeeded.cardholder_identification_number) {
-                var docNumber = document.getElementById('docNumber');
-                if (docNumber.value === '-1' || docNumber.value === '') {
-                    docNumber.classList.add('mp-form-control-error');
-                    document.getElementById('mp-error-324').style.display = 'inline-block';
-                    emptyInputs = true;
-                }
-            }
 
-            if (emptyInputs) {
-                return emptyInputs;
-            } else {
-                return emptyInputs;
-            }
-        }
-
-        /**
-         * Get form
-         */
-        function getForm() {
-            return document.querySelector('#paymentForm');
-        }
-
-        /**
-        * Focus input with error
-        *
-        * @return {bool}
-        */
-        function focusInputError() {
-            if (document.querySelectorAll('.mp-form-control-error') !== undefined) {
-                var form_inputs = document.querySelectorAll('.mp-form-control-error');
-                form_inputs[0].focus();
-            }
-        }
-
-        /**
-         *  Create Token call Mercadopago.createToken
-         *
-         *  @return {bool}
-         */
-        function createToken() {
-            hideErrors();
-
-            // Form.
-            var form = getForm();
-
-            Mercadopago.createToken(form, sdkResponseHandler);
-
-            return false;
-        }
-
-        /**
-         * Handler Response of Mercadopago.createToken
-         *
-         * @param {number} status
-         * @param {object} response
-         */
-        function sdkResponseHandler(status, response) {
-            if (status !== 200 && status !== 201) {
-                showErrors(response);
-                focusInputError();
-            } else {
-                var token = document.querySelector('#cardTokenId');
-                token.value = response.id;
-                mercado_pago_submit = true;
-                document.getElementById('paymentForm').submit();
-            }
-        }
-
-        /**
-        *
-        * @param { obje } response
-        */
-        function showErrors(response) {
-            var form = getForm();
-            for (var x = 0; x < response.cause.length; x++) {
-                var error = response.cause[x];
-                var span = undefined;
-
-                if (error.code === '208' || error.code === '209' || error.code === '325' || error.code === '326') {
-                    span = form.querySelector('#mp-error-208');
+                if (emptyInputs) {
+                    return emptyInputs;
                 } else {
-                    span = form.querySelector('#mp-error-' + error.code);
-                }
-
-                if (span !== undefined) {
-                    var input = form.querySelector(span.getAttribute('data-main'));
-                    span.style.display = 'inline-block';
-                    input.classList.add('mp-form-control-error');
+                    return emptyInputs;
                 }
             }
-            return;
-        }
 
+            /**
+             * Get form
+             */
+            function getForm() {
+                return document.querySelector('#paymentForm');
+            }
+
+            /**
+            * Focus input with error
+            *
+            * @return {bool}
+            */
+            function focusInputError() {
+                if (document.querySelectorAll('.mp-form-control-error') !== undefined) {
+                    var form_inputs = document.querySelectorAll('.mp-form-control-error');
+                    form_inputs[0].focus();
+                }
+            }
+
+            /**
+             *  Create Token call Mercadopago.createToken
+             *
+             *  @return {bool}
+             */
+            function createToken() {
+                hideErrors();
+
+                // Form.
+                var form = getForm();
+
+                Mercadopago.createToken(form, sdkResponseHandler);
+
+                return false;
+            }
+
+            /**
+             * Handler Response of Mercadopago.createToken
+             *
+             * @param {number} status
+             * @param {object} response
+             */
+            function sdkResponseHandler(status, response) {
+                if (status !== 200 && status !== 201) {
+                    showErrors(response);
+                    focusInputError();
+                } else {
+                    var token = document.querySelector('#cardTokenId');
+                    token.value = response.id;
+                    mercado_pago_submit = true;
+                    document.getElementById('paymentForm').submit();
+                }
+            }
+
+            /**
+            *
+            * @param { obje } response
+            */
+            function showErrors(response) {
+                var form = getForm();
+                for (var x = 0; x < response.cause.length; x++) {
+                    var error = response.cause[x];
+                    var span = undefined;
+
+                    if (error.code === '208' || error.code === '209' || error.code === '325' || error.code === '326') {
+                        span = form.querySelector('#mp-error-208');
+                    } else {
+                        span = form.querySelector('#mp-error-' + error.code);
+                    }
+
+                    if (span !== undefined) {
+                        var input = form.querySelector(span.getAttribute('data-main'));
+                        span.style.display = 'inline-block';
+                        input.classList.add('mp-form-control-error');
+                    }
+                }
+                return;
+            }
+        }
     </script>
 </body>
 

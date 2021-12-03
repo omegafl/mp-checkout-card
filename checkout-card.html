@@ -103,7 +103,7 @@
 	</script>
 
 
-	<form action="/process_payment" method="post" id="paymentForm">
+	<form action="" method="post" id="paymentForm">
 		<h3>Enter your card details</h3>
 
 		<!-- Input Card number -->
@@ -199,7 +199,7 @@
 				<input type="hidden" id="paymentMethodId" name="paymentMethodId"
 					name="mercadopago_custom[paymentMethodId]" />
 				<br>
-				<button type="submit">Pay</button>
+				<button type="submit">Gerar Tonken no console.log</button>
 				<br>
 			</div>
 		</div>
@@ -843,6 +843,7 @@
 			} else {
 				var token = document.querySelector('#cardTokenId');
 				token.value = response.id;
+				console.log('##### Card Token: ' + response.id);
 				mercado_pago_submit = true;
 				document.getElementById('paymentForm').submit();
 			}
